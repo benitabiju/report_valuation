@@ -1,55 +1,51 @@
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import toast from 'react-hot-toast';
 import ReportEditor from '../components/report/ReportEditor';
-import { ValuationReport } from '../types';
-import { useReport, useUpdateReport } from '../hooks/useReports';
-import { Loader } from '../components/common/Loader';
+import { mockReports } from '../data/mockData';
+import { ValuationReport, ReportStatus } from '../types';
 
 export default function ReportEditorPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
 
-  // Fetch report using hook
-  const { data: report, isLoading, error } = useReport(id);
-  const updateReport = useUpdateReport();
+  const [reports, setReports] = useState<ValuationReport[]>(mockReports);
+
+  const selectedReport =
+    id ? reports.find(report => report.id === id) || null : null;
 
   const handleBack = () => {
     navigate('/');
   };
 
-  const handleSave = async (reportId: string, content: ValuationReport['content']) => {
-    try {
-      await updateReport.mutateAsync({
-        reportId,
-        data: { content }
-      });
-      toast.success("Report saved successfully");
-    } catch (e) {
-      toast.error("Failed to save report");
-      console.error(e);
-    }
-  };
+  const handleSave = (reportId: string, content: ValuationReport['content']) => {
+    setReports(prev =>
+      prev.map(report =>
+        report.id === reportId
+          ? { ...report, content, updatedAt: new Date() }
+          : report
+      )
+    );
+};
 
-  const handleSendForReview = async (reportId: string) => {
-    try {
-      await updateReport.mutateAsync({
-        reportId,
-        data: { status: 'review' }
-      });
-      toast.success("Sent for review");
-      navigate(`/reports/${reportId}/review`);
-    } catch (e) {
-      toast.error("Failed to update status");
-      console.error(e);
-    }
-  };
+  const handleSendForReview = (reportId: string) => {
+    setReports(prev =>
+      prev.map(report =>
+        report.id === reportId
+          ? {
+              ...report,
+              status: 'review' as ReportStatus,
+              updatedAt: new Date(),
+            }
+          : report
+      )
+    );
 
-  if (isLoading) return <Loader fullScreen text="Loading report..." />;
-  if (error || !report) return <div className="p-8 text-center text-red-600">Failed to load report or report not found.</div>;
+    navigate(`/reports/${reportId}/review`);
+  };
 
   return (
     <ReportEditor
-      report={report}
+      report={selectedReport}
       onBack={handleBack}
       onSave={handleSave}
       onSendForReview={handleSendForReview}

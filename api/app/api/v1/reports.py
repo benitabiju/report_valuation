@@ -32,15 +32,9 @@ class ImportRequest(BaseModel):
 class CreateReportRequest(BaseModel):
   report_name: str
   bank_name: str
-  property_type: str = "Residential"
-  location: str = ""
 
 class UpdateReportRequest(BaseModel):
-    report_name: Optional[str] = None
-    status: Optional[str] = None
-    content: Optional[Dict] = None
-    property_type: Optional[str] = None
-    location: Optional[str] = None
+    report_name: str
 
 class AnalysisRequest(BaseModel):
     report_id: str
@@ -48,7 +42,174 @@ class AnalysisRequest(BaseModel):
 # ----------------------
 # APIs
 # ----------------------
-# ... (lines 46-213 omitted)
+
+@router.post("/reports")
+async def create_report(
+    payload: CreateReportRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Create a new report (no document upload)"""
+
+    report = ReportRepository.create_report(
+        report_name=payload.report_name,
+        bank_name=payload.bank_name,
+        user_id=current_user["id"],
+        created_by=current_user["id"],
+    )
+
+    if not report:
+        raise HTTPException(status_code=500, detail="Failed to create report")
+
+    return {
+        "id": report["id"],
+        "report_name": report["report_name"],
+        "created_at": report.get("created_at", datetime.utcnow().isoformat()),
+    }
+
+
+@router.get("/reports")
+async def get_reports(current_user: dict = Depends(get_current_user)):
+    """Get all reports for current user"""
+
+    if "admin" in current_user.get("roles", []):
+        reports = ReportRepository.get_all()
+    else:
+        reports = ReportRepository.get_all(user_id=current_user["id"])
+
+    return {"success": True, "reports": reports}
+
+
+@router.get("/reports/check")
+async def check_report_name(
+    report_name: str = Query(..., min_length=1),
+    current_user: dict = Depends(get_current_user),
+):
+    """Check if report name already exists"""
+
+    exists = ReportRepository.exists_by_name(
+        report_name,
+        user_id=current_user["id"],
+    )
+
+    return {"exists": exists}
+
+@router.post("/reports/{report_id}/import")
+async def import_report_files(
+    report_id: str,
+    payload: ImportRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Import selected files: OCR + translate and store file_content
+    """
+
+    # Validate report
+    report = ReportRepository.get_by_id(report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if (
+        report["user_id"] != current_user["id"]
+        and "admin" not in current_user.get("roles", [])
+    ):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    imported_files = []
+
+    for file_id in payload.file_ids:
+        file_doc = OriginalFileRepository.get_by_id(file_id)
+        if not file_doc:
+            continue
+
+        file_path = file_doc.get("file_path")
+        if not file_path or not os.path.exists(file_path):
+            continue
+
+        # OCR + translate
+        final_text = await processing_service.import_document(file_path)
+
+        # Save content
+        OriginalFileRepository.update_file_content(
+            file_id=file_id,
+            content=final_text,
+            updated_by=current_user["id"]
+        )
+
+        imported_files.append({
+            "file_id": file_id,
+            "file_name": file_doc.get("file_name")
+        })
+
+    return {
+        "success": True,
+        "report_id": report_id,
+        "imported_files": imported_files,
+        "message": "Files imported successfully"
+    }
+
+
+@router.post("/reports/analysis")
+async def analyze_and_summarize(
+    payload: AnalysisRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Analyze imported report documents using OpenAI"""
+    try:
+        # Validate report
+        report = ReportRepository.get_by_id(payload.report_id)
+        if not report:
+            raise HTTPException(
+                status_code=404,
+                detail="Report not found"
+            )
+
+        if (
+            report["user_id"] != current_user["id"]
+            and "admin" not in current_user.get("roles", [])
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied"
+            )
+
+        # Fetch imported files
+        files = OriginalFileRepository.get_by_report(payload.report_id)
+
+        # Collect file contents
+        contents = []
+        for file in files:
+            file_content = file.get("file_content")
+            if file_content and file_content.strip():
+                contents.append(
+                    f"===== DOCUMENT: {file.get('file_name')} =====\n{file_content}"
+                )
+
+        if not contents:
+            raise HTTPException(
+                status_code=400,
+                detail="No imported document content found. Please run import before analysis."
+            )
+
+        # Merge all document contents
+        merged_content = "\n\n".join(contents)
+
+        # Analyze using LLM
+        summarized_content = llm_service.summarize(merged_content)
+
+        return {
+            "id": report["id"],
+            "report_name": report["report_name"],
+            "analysis": summarized_content
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to analyze report"
+        )
+
 
 @router.put("/reports/{report_id}")
 async def update_report(
@@ -56,7 +217,7 @@ async def update_report(
     payload: UpdateReportRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Update report fields"""
+    """Update report name"""
 
     report = ReportRepository.get_by_id(report_id)
     if not report:
@@ -68,11 +229,9 @@ async def update_report(
     ):
         raise HTTPException(status_code=403, detail="Access denied")
 
-    data = payload.dict(exclude_unset=True)
-    
-    updated_report = ReportRepository.update(
+    updated_report = ReportRepository.update_name(
         report_id,
-        data,
+        payload.report_name,
         current_user["id"],
     )
 
@@ -83,7 +242,6 @@ async def update_report(
         "id": updated_report["id"],
         "report_name": updated_report["report_name"],
         "created_at": updated_report["created_at"],
-        # Return other fields if needed, but dict is enough for now or use Pydantic response
     }
 
 

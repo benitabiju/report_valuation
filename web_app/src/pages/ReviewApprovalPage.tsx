@@ -1,83 +1,56 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import toast from 'react-hot-toast';
 import {
+  Download,
   FileText,
   CheckCircle,
+  XCircle,
   Clock,
   ChevronLeft,
   History,
 } from 'lucide-react';
 
-import { ReportStatus } from '../types';
+import { ValuationReport, ReportStatus } from '../types';
 import { formatDate } from '../utils/formatDate';
-import { useReport, useUpdateReport } from '../hooks/useReports';
-import reportsApi from '../apis/reports.api';
-import { Loader } from '../components/common/Loader';
+import { mockReports } from '../data/mockData';
 
 export default function ReviewApprovalPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
 
-  const { data: report, isLoading, error, refetch } = useReport(id);
-  const updateReport = useUpdateReport();
-
+  const [reports, setReports] = useState<ValuationReport[]>(mockReports);
   const [showAuditTrail, setShowAuditTrail] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+
+  const report = id
+    ? reports.find(r => r.id === id) || null
+    : null;
 
   const handleBack = () => {
     navigate('/');
   };
 
-  const handleStatusChange = async (reportId: string, status: ReportStatus) => {
-    try {
-      await updateReport.mutateAsync({
-        reportId,
-        data: { status }
-      });
-      toast.success(`Report status updated to ${status}`);
-      refetch();
-    } catch (e) {
-      toast.error("Failed to update status");
+  const handleStatusChange = (reportId: string, status: ReportStatus) => {
+    setReports(prev =>
+      prev.map(r =>
+        r.id === reportId
+          ? { ...r, status, updatedAt: new Date() }
+          : r
+      )
+    );
+  };
+
+  const handleExport = (reportId: string, format: 'pdf' | 'docx') => {
+    const r = reports.find(rep => rep.id === reportId);
+    if (r) {
+      alert(`Exporting ${r.customerName}'s report as ${format.toUpperCase()}`);
     }
   };
 
-  const handleExport = async (reportId: string, format: 'pdf' | 'docx') => {
-    setIsExporting(true);
-    try {
-      let blob;
-      if (format === 'pdf') {
-        blob = await reportsApi.exportPdf(reportId);
-      } else {
-        blob = await reportsApi.exportDocx(reportId);
-      }
-
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${report?.customerName || 'report'}.${format}`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      toast.success(`Report exported as ${format.toUpperCase()}`);
-    } catch (e) {
-      toast.error("Failed to export report");
-      console.error(e);
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  if (isLoading) return <Loader fullScreen text="Loading report..." />;
-  if (error || !report) {
+  if (!report) {
     return (
       <div className="p-8">
         <div className="bg-white border rounded-lg p-12 text-center">
           <p className="text-gray-600">Report not found</p>
-          <button onClick={handleBack} className="mt-4 text-blue-600 hover:underline">
-            Go to Dashboard
-          </button>
         </div>
       </div>
     );
@@ -118,7 +91,7 @@ export default function ReviewApprovalPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowAuditTrail(!showAuditTrail)}
-              className="flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-gray-50 bg-white"
+              className="flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-gray-50"
             >
               <History size={18} />
               Audit Trail
@@ -126,17 +99,15 @@ export default function ReviewApprovalPage() {
 
             <button
               onClick={() => handleExport(report.id, 'pdf')}
-              disabled={isExporting}
-              className="px-4 py-2 border rounded-lg hover:bg-gray-50 bg-white disabled:opacity-50"
+              className="px-4 py-2 border rounded-lg hover:bg-gray-50"
             >
-              {isExporting ? 'Exporting...' : 'PDF'}
+              PDF
             </button>
             <button
               onClick={() => handleExport(report.id, 'docx')}
-              disabled={isExporting}
-              className="px-4 py-2 border rounded-lg hover:bg-gray-50 bg-white disabled:opacity-50"
+              className="px-4 py-2 border rounded-lg hover:bg-gray-50"
             >
-              {isExporting ? 'Exporting...' : 'DOCX'}
+              DOCX
             </button>
           </div>
         </div>
@@ -162,10 +133,11 @@ export default function ReviewApprovalPage() {
                 <div key={item.status} className="flex items-center flex-1">
                   <button
                     onClick={() => handleStatusChange(report.id, item.status)}
-                    className={`flex items-center gap-2 px-4 py-2 border-2 rounded-lg transition-colors
-                      ${report.status === item.status
-                        ? getStatusColor(item.status)
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    className={`flex items-center gap-2 px-4 py-2 border-2 rounded-lg
+                      ${
+                        report.status === item.status
+                          ? getStatusColor(item.status)
+                          : 'border-gray-200 text-gray-600'
                       }`}
                   >
                     {item.icon}
@@ -182,14 +154,6 @@ export default function ReviewApprovalPage() {
               <strong>Updated:</strong> {formatDate(report.updatedAt, 'long')}
             </p>
           </div>
-
-          {/* Placeholder for future Audit Trail or other components */}
-          {showAuditTrail && (
-            <div className="bg-white border rounded-lg p-6">
-              <h3 className="text-lg font-medium mb-4">Audit Trail</h3>
-              <p className="text-gray-500">Audit trail implementation coming soon...</p>
-            </div>
-          )}
         </div>
       </div>
     </div>

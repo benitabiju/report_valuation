@@ -4,6 +4,8 @@ import {
   LayoutDashboard,
   Upload,
   FolderTree,
+  FileEdit,
+  CheckCircle,
   ChevronLeft,
   ChevronRight,
   Menu,
@@ -11,7 +13,6 @@ import {
   LogOut
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { LogoutModal } from '../common/LogoutModal';
 
 interface NavItem {
   path: string;
@@ -29,7 +30,6 @@ const navItems: NavItem[] = [
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [logoutModalOpen, setLogoutModalOpen] = useState(false);
 
   const navigate = useNavigate();
   const { user, logout, loginLoading } = useAuth();
@@ -41,13 +41,8 @@ export default function Layout() {
       .join('')
       .toUpperCase() || 'U';
 
-  const handleLogoutClick = () => {
-    setLogoutModalOpen(true);
-  };
-
-  const confirmLogout = async () => {
+  const handleLogout = async () => {
     await logout();
-    setLogoutModalOpen(false);
     navigate('/login');
   };
 
@@ -132,7 +127,7 @@ export default function Layout() {
 
             {sidebarOpen && (
               <button
-                onClick={handleLogoutClick}
+                onClick={handleLogout}
                 disabled={loginLoading}
                 title="Logout"
                 className="p-2 rounded-md hover:bg-gray-100 text-gray-600 disabled:opacity-50"
@@ -158,14 +153,6 @@ export default function Layout() {
           <Outlet />
         </div>
       </main>
-
-      {/* Logout Confirmation Modal */}
-      <LogoutModal
-        isOpen={logoutModalOpen}
-        onClose={() => setLogoutModalOpen(false)}
-        onConfirm={confirmLogout}
-        isLoading={loginLoading}
-      />
     </div>
   );
 }
