@@ -1,25 +1,33 @@
 FROM python:3.12-slim
 
-# System deps (OCR + PDF)
+# ---- system deps ----
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     tesseract-ocr-tam \
     poppler-utils \
+    libgl1 \
     gcc \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Set workdir
+# ---- env vars ----
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
+ENV TESSERACT_PATH=/usr/bin/tesseract
+
+# ---- workdir ----
 WORKDIR /app
 
-# Install Python deps
+# ---- install python deps ----
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code
-COPY app ./app
+# ---- copy app ----
+COPY . .
 
-# Expose FastAPI port
+# ---- expose ----
 EXPOSE 8000
 
-# Run FastAPI
+# ---- run ----
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

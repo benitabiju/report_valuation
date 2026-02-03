@@ -6,14 +6,9 @@ import tempfile
 import os
 
 class OCRService:
-    def __init__(self, lang: str = "tam+eng"):
+    def __init__(self, lang: str = "tam"):
         self.lang = lang
-
-        # ✅ Explicit binary path (DO NOT read from env)
         pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
-
-        # ✅ Explicit tessdata path
-        os.environ["TESSDATA_PREFIX"] = "/usr/share/tesseract-ocr/5/tessdata/"
 
     def extract_text_from_pdf(
         self,

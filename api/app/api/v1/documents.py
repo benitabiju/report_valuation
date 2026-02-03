@@ -132,7 +132,6 @@ async def process_document(
 
 @router.post("/documents/process-multiple")
 async def process_multiple_documents(
-<<<<<<< HEAD
     files: List[UploadFile] = File(...),
     client_name: str = Form(...),
     report_id: str = Form(...),
@@ -258,132 +257,7 @@ async def process_multiple_documents(
             status_code=500,
             detail="Failed to process documents"
         )
-    
-    
-=======
-  files: List[UploadFile] = File(...),
-  client_name: str = Form(...),
-  report_id: str = Form(...),
-  current_user: dict = Depends(get_current_user),
-):
-  """Upload and process multiple documents (max 5)"""
-  try:
-    if len(files) == 0:
-      raise HTTPException(
-        status_code=400,
-        detail="No files uploaded"
-      )
 
-    if len(files) > 5:
-      raise HTTPException(
-        status_code=400,
-        detail="Maximum 5 documents allowed"
-      )
-
-    # Validate report
-    report = ReportRepository.get_by_id(report_id)
-    if not report:
-      raise HTTPException(
-        status_code=404,
-        detail="Report not found"
-      )
-
-    if (
-      report["user_id"] != current_user["id"]
-      and "admin" not in current_user.get("roles", [])
-    ):
-      raise HTTPException(
-        status_code=403,
-        detail="Access denied"
-      )
-
-    now = datetime.utcnow()
-    year = str(now.year)
-    month = now.strftime("%b").lower()
-    safe_client = client_name.strip().replace(" ", "_").lower()
-
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    UPLOAD_ROOT = os.path.join(BASE_DIR, "..", "..", "..", "uploads")
-
-    upload_dir = os.path.join(
-      UPLOAD_ROOT,
-      year,
-      month,
-      safe_client
-    )
-    os.makedirs(upload_dir, exist_ok=True)
-
-    uploaded_documents = []
-
-    for file in files:
-      file_ext = file.filename.split(".")[-1].lower()
-      if file_ext not in config.SUPPORTED_FILE_TYPES:
-        raise HTTPException(
-          status_code=400,
-          detail=f"Unsupported file type: {file.filename}"
-        )
-
-      content = await file.read()
-      file_size_mb = len(content) / (1024 * 1024)
-
-      # Create DB record
-      file_doc = OriginalFileRepository.create(
-        report_id=report_id,
-        file_name=file.filename,
-        file_type=file_ext,
-        file_path=None,
-        created_by=current_user["id"],
-        file_size_mb=file_size_mb
-      )
-      document_id = file_doc["id"]
-
-      file_path = os.path.join(
-        upload_dir,
-        f"{document_id}.{file_ext}"
-      )
-
-      with open(file_path, "wb") as f:
-        f.write(content)
-
-      OriginalFileRepository.update_path(
-        document_id,
-        file_path,
-        current_user["id"]
-      )
-
-      request = DocumentRequest(
-        file_path=file_path,
-        file_type="pdf" if file_ext == "pdf" else "image"
-      )
-
-      await processing_service.process_document(
-        request,
-        document_id
-      )
-
-      uploaded_documents.append({
-        "document_id": document_id,
-        "file_name": file.filename,
-        "file_path": file_path
-      })
-
-    return {
-      "success": True,
-      "documents": uploaded_documents
-    }
-
-  except HTTPException:
-    raise
-  except Exception as e:
-    logger.error(
-      f"Error processing multiple documents: {str(e)}",
-      exc_info=True
-    )
-    raise HTTPException(
-      status_code=500,
-      detail="Failed to process documents"
-    )
->>>>>>> upstream/main
 
 @router.post("/process-from-path")
 async def process_document_from_path(request: DocumentRequest):

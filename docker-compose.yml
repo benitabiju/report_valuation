@@ -1,43 +1,26 @@
 version: "3.9"
 
 services:
-  mongodb:
-    image: mongo:6
-    container_name: mongodb
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    networks:
-      - app-network
-
   backend:
     build:
       context: ./api
-    container_name: fastapi
+    container_name: report_backend
     ports:
       - "8000:8000"
     env_file:
       - ./api/.env
     depends_on:
       - mongodb
-    networks:
-      - app-network
+    volumes:
+      - ./uploads:/app/uploads
+    restart: always
 
-  frontend:
-    build:
-      context: ./web_app
-    container_name: frontend
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-    networks:
-      - app-network
-
-networks:
-  app-network:
-    driver: bridge
+  mongodb:
+    image: mongo:6
+    container_name: report_mongodb
+    volumes:
+      - mongo_data:/data/db
+    restart: always
 
 volumes:
   mongo_data:

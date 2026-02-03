@@ -26,9 +26,6 @@ llm_service = LLMService()
 # Request Models
 # ----------------------
 
-class ImportRequest(BaseModel):
-    file_ids: list[str]
-
 class CreateReportRequest(BaseModel):
   report_name: str
   bank_name: str
@@ -96,23 +93,14 @@ async def check_report_name(
 @router.post("/reports/{report_id}/import")
 async def import_report_files(
     report_id: str,
-<<<<<<< HEAD
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Import all uploaded files under a report
-    """
-
-=======
-    payload: ImportRequest,
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Import selected files: OCR + translate and store file_content
+    Import all uploaded files under a report:
+    OCR + translate and store file_content
     """
 
     # Validate report
->>>>>>> upstream/main
     report = ReportRepository.get_by_id(report_id)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -123,84 +111,62 @@ async def import_report_files(
     ):
         raise HTTPException(status_code=403, detail="Access denied")
 
-<<<<<<< HEAD
     files = OriginalFileRepository.get_by_report(report_id)
-
     if not files:
         raise HTTPException(
             status_code=400,
             detail="No files found for this report"
         )
 
-    imported = []
-    skipped = []
+    imported_files = []
+    skipped_files = []
 
     for file_doc in files:
+        file_id = file_doc["id"]
         file_path = file_doc.get("file_path")
 
         if not file_path or not os.path.exists(file_path):
-            skipped.append({
-                "file_id": file_doc["id"],
+            skipped_files.append({
+                "file_id": file_id,
                 "reason": "File missing on disk"
             })
             continue
 
         if file_doc.get("file_content"):
-            skipped.append({
-                "file_id": file_doc["id"],
+            skipped_files.append({
+                "file_id": file_id,
                 "reason": "Already imported"
             })
             continue
 
-        final_text = await processing_service.import_document(file_path)
+        try:
+            final_text = await processing_service.import_document(file_path)
 
-        OriginalFileRepository.update_file_content(
-            file_id=file_doc["id"],
-=======
-    imported_files = []
+            OriginalFileRepository.update_file_content(
+                file_id=file_id,
+                content=final_text,
+                updated_by=current_user["id"]
+            )
 
-    for file_id in payload.file_ids:
-        file_doc = OriginalFileRepository.get_by_id(file_id)
-        if not file_doc:
-            continue
+            imported_files.append({
+                "file_id": file_id,
+                "file_name": file_doc.get("file_name")
+            })
 
-        file_path = file_doc.get("file_path")
-        if not file_path or not os.path.exists(file_path):
-            continue
-
-        # OCR + translate
-        final_text = await processing_service.import_document(file_path)
-
-        # Save content
-        OriginalFileRepository.update_file_content(
-            file_id=file_id,
->>>>>>> upstream/main
-            content=final_text,
-            updated_by=current_user["id"]
-        )
-
-<<<<<<< HEAD
-        imported.append({
-            "file_id": file_doc["id"],
-            "file_name": file_doc["file_name"]
-=======
-        imported_files.append({
-            "file_id": file_id,
-            "file_name": file_doc.get("file_name")
->>>>>>> upstream/main
-        })
+        except Exception as e:
+            skipped_files.append({
+                "file_id": file_id,
+                "reason": f"Import failed: {str(e)}"
+            })
 
     return {
         "success": True,
         "report_id": report_id,
-<<<<<<< HEAD
-        "imported_files": imported,
-        "skipped_files": skipped
-=======
         "imported_files": imported_files,
-        "message": "Files imported successfully"
->>>>>>> upstream/main
+        "skipped_files": skipped_files,
+        "message": "Import completed"
     }
+
 
 
 @router.post("/reports/analysis")
@@ -376,8 +342,4 @@ async def get_file_contents(
             }
             for f in files
         ]
-<<<<<<< HEAD
     }
-=======
-    }
->>>>>>> upstream/main
