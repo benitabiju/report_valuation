@@ -1,4 +1,4 @@
-# Tamil Land Document Translator - Full Stack Application:
+# Tamil Land Document Translator - Full Stack Application
 
 This application translates Tamil land documents to English using OCR and AI. It consists of a FastAPI backend and a React frontend.
 
