@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Optional, List
 from bson import ObjectId
 from app.db.session import db, reports, original_files, ai_extracted_content, final_reports
+from app.models.report import ReportStatus
 
 
 class ReportRepository:
